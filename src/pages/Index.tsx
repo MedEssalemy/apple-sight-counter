@@ -16,6 +16,7 @@ const Index = () => {
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState<JobResult | null>(null);
   const [networkErrorCount, setNetworkErrorCount] = useState(0);
+  const [pollingActive, setPollingActive] = useState(false);
 
   const handleVideoUploaded = useCallback((file: File) => {
     setVideoFile(file);
@@ -23,6 +24,7 @@ const Index = () => {
     setProgress(0);
     setResults(null);
     setNetworkErrorCount(0);
+    setPollingActive(false);
 
     const uploadVideo = async () => {
       try {
@@ -48,6 +50,7 @@ const Index = () => {
           setTimeout(() => {
             setStatus("processing");
             setProgress(0);
+            setPollingActive(true); // Activate polling when processing begins
           }, 500);
           
           toast({
@@ -78,11 +81,14 @@ const Index = () => {
     setProgress(0);
     setResults(null);
     setNetworkErrorCount(0);
+    setPollingActive(false);
   }, []);
 
-  // Poll for job status with improved error handling
+  // Enhanced poll for job status with better error handling
   useEffect(() => {
-    if (!jobId || status !== "processing") return;
+    if (!jobId || status !== "processing" || !pollingActive) return;
+    
+    console.log(`Setting up polling for job: ${jobId}`);
     
     let statusInterval: NodeJS.Timeout;
     let errorTimeout: NodeJS.Timeout;
@@ -95,10 +101,13 @@ const Index = () => {
         // Reset error count on successful response
         setNetworkErrorCount(0);
         
+        console.log(`Job status:`, statusData);
+        
         if (statusData.status === "completed") {
           setStatus("completed");
           setProgress(100);
           setResults(statusData.result || null);
+          setPollingActive(false);
           clearInterval(statusInterval);
           
           toast({
@@ -109,6 +118,7 @@ const Index = () => {
           });
         } else if (statusData.status === "failed") {
           setStatus("error");
+          setPollingActive(false);
           clearInterval(statusInterval);
           
           toast({
@@ -128,21 +138,17 @@ const Index = () => {
           const newCount = prev + 1;
           
           // After too many consecutive errors, show an error message
-          if (newCount >= 5) {
-            clearInterval(statusInterval);
+          // but don't stop polling completely
+          if (newCount >= 5 && newCount % 5 === 0) {
+            toast({
+              variant: "destructive",
+              title: "Connection problems",
+              description: "We're having trouble connecting to the server. Still trying...",
+            });
             
-            // Don't set error state immediately, retry after a longer timeout
-            errorTimeout = setTimeout(() => {
-              toast({
-                variant: "destructive",
-                title: "Connection problems",
-                description: "We're having trouble connecting to the server. Your analysis may continue in the background.",
-              });
-              
-              // Restart polling with a longer interval
-              setNetworkErrorCount(0);
-              statusInterval = setInterval(checkStatus, 8000);
-            }, 5000);
+            // Slow down polling rate after encountering errors
+            clearInterval(statusInterval);
+            statusInterval = setInterval(checkStatus, Math.min(8000, 3000 + (newCount * 500)));
           }
           
           return newCount;
@@ -155,10 +161,23 @@ const Index = () => {
     statusInterval = setInterval(checkStatus, 3000);
     
     return () => {
+      console.log("Cleaning up status polling");
       clearInterval(statusInterval);
       clearTimeout(errorTimeout);
     };
-  }, [jobId, status, toast]);
+  }, [jobId, status, toast, pollingActive]);
+
+  // Add a backup effect to retry polling if it was somehow interrupted
+  useEffect(() => {
+    if (jobId && status === "processing" && !pollingActive) {
+      const timer = setTimeout(() => {
+        console.log("Reactivating polling");
+        setPollingActive(true);
+      }, 5000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [jobId, status, pollingActive]);
 
   return (
     <div className="min-h-screen bg-background">

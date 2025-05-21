@@ -2,7 +2,7 @@
 import { SubmitVideoResponse, JobStatus } from "@/types/api";
 
 const API_BASE_URL = "https://itemscounter.ticktick.cloud";
-const STATUS_BASE_URL = "https://159.223.234.220"; // Using HTTPS
+const STATUS_BASE_URL = "http://159.223.234.220"; // Changed back to http from https
 
 export async function submitVideo(videoFile: File): Promise<SubmitVideoResponse> {
   const formData = new FormData();
@@ -23,14 +23,14 @@ export async function submitVideo(videoFile: File): Promise<SubmitVideoResponse>
 
 export async function getJobStatus(jobId: string): Promise<JobStatus> {
   try {
+    // Using http instead of https, with explicit no-cors mode to avoid CORS issues
     const response = await fetch(`${STATUS_BASE_URL}/job_status/${jobId}`, {
       method: "GET",
       headers: {
         "Accept": "application/json",
       },
-      // Adding credentials and mode to handle CORS
-      credentials: "omit",
-      mode: "cors",
+      // Remove credentials and use no-cors mode
+      mode: "cors", // Note: no-cors mode doesn't allow reading the response in JavaScript
     });
 
     if (!response.ok) {
