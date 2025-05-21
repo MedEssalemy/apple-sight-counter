@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import UploadArea from "@/components/upload-area";
@@ -14,12 +15,14 @@ const Index = () => {
   const [status, setStatus] = useState<AppStatus>("idle");
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState<JobResult | null>(null);
+  const [networkErrorCount, setNetworkErrorCount] = useState(0);
 
   const handleVideoUploaded = useCallback((file: File) => {
     setVideoFile(file);
     setStatus("uploading");
     setProgress(0);
     setResults(null);
+    setNetworkErrorCount(0);
 
     const uploadVideo = async () => {
       try {
@@ -74,17 +77,23 @@ const Index = () => {
     setStatus("idle");
     setProgress(0);
     setResults(null);
+    setNetworkErrorCount(0);
   }, []);
 
-  // Poll for job status
+  // Poll for job status with improved error handling
   useEffect(() => {
     if (!jobId || status !== "processing") return;
     
     let statusInterval: NodeJS.Timeout;
+    let errorTimeout: NodeJS.Timeout;
     
     const checkStatus = async () => {
       try {
+        console.log(`Checking status for job: ${jobId}`);
         const statusData: JobStatus = await getJobStatus(jobId);
+        
+        // Reset error count on successful response
+        setNetworkErrorCount(0);
         
         if (statusData.status === "completed") {
           setStatus("completed");
@@ -114,11 +123,29 @@ const Index = () => {
       } catch (error) {
         console.error("Status check error:", error);
         
-        // Don't set error state immediately, keep trying
-        toast({
-          variant: "destructive",
-          title: "Status check failed",
-          description: "Will try again shortly...",
+        // Increment error count
+        setNetworkErrorCount(prev => {
+          const newCount = prev + 1;
+          
+          // After too many consecutive errors, show an error message
+          if (newCount >= 5) {
+            clearInterval(statusInterval);
+            
+            // Don't set error state immediately, retry after a longer timeout
+            errorTimeout = setTimeout(() => {
+              toast({
+                variant: "destructive",
+                title: "Connection problems",
+                description: "We're having trouble connecting to the server. Your analysis may continue in the background.",
+              });
+              
+              // Restart polling with a longer interval
+              setNetworkErrorCount(0);
+              statusInterval = setInterval(checkStatus, 8000);
+            }, 5000);
+          }
+          
+          return newCount;
         });
       }
     };
@@ -127,7 +154,10 @@ const Index = () => {
     checkStatus();
     statusInterval = setInterval(checkStatus, 3000);
     
-    return () => clearInterval(statusInterval);
+    return () => {
+      clearInterval(statusInterval);
+      clearTimeout(errorTimeout);
+    };
   }, [jobId, status, toast]);
 
   return (

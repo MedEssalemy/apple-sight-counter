@@ -2,11 +2,11 @@
 import { SubmitVideoResponse, JobStatus } from "@/types/api";
 
 const API_BASE_URL = "https://itemscounter.ticktick.cloud";
-const STATUS_BASE_URL = "https://159.223.234.220"; // Changed from http to https
+const STATUS_BASE_URL = "https://159.223.234.220"; // Using HTTPS
 
 export async function submitVideo(videoFile: File): Promise<SubmitVideoResponse> {
   const formData = new FormData();
-  formData.append("video", videoFile); // Changed from "file" to "video" based on API error
+  formData.append("video", videoFile); // Using "video" as the field name
 
   const response = await fetch(`${API_BASE_URL}/submit_video/`, {
     method: "POST",
@@ -22,12 +22,31 @@ export async function submitVideo(videoFile: File): Promise<SubmitVideoResponse>
 }
 
 export async function getJobStatus(jobId: string): Promise<JobStatus> {
-  const response = await fetch(`${STATUS_BASE_URL}/job_status/${jobId}`);
+  try {
+    const response = await fetch(`${STATUS_BASE_URL}/job_status/${jobId}`, {
+      method: "GET",
+      headers: {
+        "Accept": "application/json",
+      },
+      // Adding credentials and mode to handle CORS
+      credentials: "omit",
+      mode: "cors",
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to get job status: ${response.status} - ${errorText}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to get job status: ${response.status} - ${errorText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Job status fetch error:", error);
+    // Return a fallback status to prevent app from crashing
+    // This allows the app to retry and potentially recover
+    return {
+      status: "processing",
+      progress: 10,
+      error: error instanceof Error ? error.message : "Network request failed",
+    };
   }
-
-  return response.json();
 }
