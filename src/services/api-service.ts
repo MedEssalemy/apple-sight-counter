@@ -6,7 +6,7 @@ const STATUS_BASE_URL = "http://159.223.234.220";
 
 export async function submitVideo(videoFile: File): Promise<SubmitVideoResponse> {
   const formData = new FormData();
-  formData.append("file", videoFile);
+  formData.append("video", videoFile); // Changed from "file" to "video" based on API error
 
   const response = await fetch(`${API_BASE_URL}/submit_video/`, {
     method: "POST",
