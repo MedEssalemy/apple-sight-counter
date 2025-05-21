@@ -2,7 +2,7 @@
 import { SubmitVideoResponse, JobStatus } from "@/types/api";
 
 const API_BASE_URL = "https://itemscounter.ticktick.cloud";
-const STATUS_BASE_URL = "http://159.223.234.220";
+const STATUS_BASE_URL = "https://159.223.234.220"; // Changed from http to https
 
 export async function submitVideo(videoFile: File): Promise<SubmitVideoResponse> {
   const formData = new FormData();
